@@ -95,7 +95,9 @@ app.post('/api/movies', (req, res) => {
       if (err) {
         res.status(500).send('Error saving the movie');
       } else {
-        res.status(201).send('Movie successfully saved');
+        const id = result.insertId;
+        const createdMovie = { id, title, director, year, color, duration };
+        res.status(201).send(createdMovie);
       }
     }
   );
@@ -138,23 +140,27 @@ app.put('/api/users/:id', (req, res) => {
         res.status(404).send(`User with id ${userId} not found.`);
       else res.status(500).send('Error updating a user');
     });
-});
+}); 
 
 app.put('/api/movies/:id', (req, res) => {
   const movieId = req.params.id;
-  const moviePropsToUpdate = req.body;
-  connection.query(
-    'UPDATE movies SET ? WHERE id = ?',
-    [moviePropsToUpdate, movieId],
-    (err) => {
-      if (err) {
-        console.log(err);
-        res.status(500).send('Error updating a movie');
-      } else {
-        res.status(200).send('Movie updated successfully 🎉');
-      }
-    }
-  );
+  const db = connection.promise();
+  let existingMovie = null;
+  db.query('SELECT * FROM movies WHERE id = ?', [movieId])
+  .then(([results]) => {
+    existingMovie = results[0];
+    if (!existingMovie) return Promise.reject('RECORD_NOT_FOUND');
+    return db.query('UPDATE movies SET ? WHERE id = ?', [req.body, movieId]);
+  })
+  .then(() => {
+    res.status(200).json({ ...existingMovie, ...req.body });
+  })
+  .catch((err) => {
+    console.error(err);
+    if (err === 'RECORD_NOT_FOUND')
+    res.status(404).send(`Movie with id ${movieId} not found.`);
+    else res.status(500).send('Error updating a movie.');
+  });
 });
 
 app.delete('/api/users/:id', (req, res) => {
